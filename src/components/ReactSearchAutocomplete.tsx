@@ -18,6 +18,7 @@ export const MAX_RESULTS = 10
 
 export interface ReactSearchAutocompleteProps<T> {
   items: T[]
+  fetchNewItems: (keyword: string) => Promise<T[]>
   fuseOptions?: Fuse.IFuseOptions<T>
   inputDebounce?: number
   onSearch?: (keyword: string, results: T[]) => void
@@ -42,6 +43,7 @@ export interface ReactSearchAutocompleteProps<T> {
 
 export default function ReactSearchAutocomplete<T>({
   items = [],
+  fetchNewItems = () => Promise.resolve(items),
   fuseOptions = defaultFuseOptions,
   inputDebounce = DEFAULT_INPUT_DEBOUNCE,
   onSearch = () => {},
@@ -67,7 +69,6 @@ export default function ReactSearchAutocomplete<T>({
   const options = { ...defaultFuseOptions, ...fuseOptions }
 
   const fuse = new Fuse(items, options)
-  fuse.setCollection(items)
 
   const [searchString, setSearchString] = useState<string>(inputSearchString)
   const [results, setResults] = useState<any[]>([])
@@ -83,13 +84,6 @@ export default function ReactSearchAutocomplete<T>({
 
     return () => clearTimeout(timeoutId)
   }, [inputSearchString])
-
-  useEffect(() => {
-    searchString?.length > 0 &&
-      results &&
-      results?.length > 0 &&
-      setResults(fuseResults(searchString))
-  }, [items])
 
   useEffect(() => {
     if (
@@ -127,7 +121,9 @@ export default function ReactSearchAutocomplete<T>({
     setHasFocus(true)
   }
 
-  const callOnSearch = (keyword: string) => {
+  const callOnSearch = async (keyword: string) => {
+    const results = await fetchNewItems(keyword)
+    fuse.setCollection(results)
     let newResults: T[] = []
 
     keyword?.length > 0 && (newResults = fuseResults(keyword))
@@ -139,8 +135,8 @@ export default function ReactSearchAutocomplete<T>({
 
   const handleOnSearch = React.useCallback(
     inputDebounce > 0
-      ? debounce((keyword: string) => callOnSearch(keyword), inputDebounce)
-      : (keyword: string) => callOnSearch(keyword),
+      ? debounce(async (keyword: string) => await callOnSearch(keyword), inputDebounce)
+      : async (keyword: string) => await callOnSearch(keyword),
     [items]
   )
 
@@ -224,7 +220,7 @@ export default function ReactSearchAutocomplete<T>({
   return (
     <ThemeProvider theme={theme}>
       <StyledReactSearchAutocomplete>
-        <div className="wrapper">
+        <div className='wrapper'>
           <SearchInput
             searchString={searchString}
             setSearchString={handleSetSearchString}
@@ -281,9 +277,11 @@ const StyledReactSearchAutocomplete = styled.div`
     &:hover {
       box-shadow: ${(props: any) => props.theme.boxShadow};
     }
+
     &:active {
       box-shadow: ${(props: any) => props.theme.boxShadow};
     }
+
     &:focus-within {
       box-shadow: ${(props: any) => props.theme.boxShadow};
     }
